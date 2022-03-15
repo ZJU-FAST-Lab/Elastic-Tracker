@@ -69,3 +69,8 @@ roslaunch planning simulation_landing.launch
 <p align="center">
     <img src="figs/sim_landing.gif" width="500"/>
 </p>
+
+## 3. Acknowledgement
+We use [**MINCO**](https://github.com/ZJU-FAST-Lab/GCOPTER) as our trajectory representation.
+
+We use [**DecompROS**](https://github.com/sikang/DecompROS) for safe flight corridor generation and visualization.
