@@ -6,6 +6,8 @@
 
 namespace traj_opt {
 
+static bool landing_ = false;
+
 // SECTION  variables transformation and gradient transmission
 static double expC2(double t) {
   return t > 0.0 ? ((0.5 * t + 1.0) * t + 1.0)
@@ -327,6 +329,7 @@ bool TrajOpt::generate_traj(const Eigen::MatrixXd& iniState,
                             const std::vector<double>& thetas,
                             const std::vector<Eigen::MatrixXd>& hPolys,
                             Trajectory& traj) {
+  landing_ = false;
   cfgHs_ = hPolys;
   if (cfgHs_.size() == 1) {
     cfgHs_.push_back(cfgHs_[0]);
@@ -355,6 +358,57 @@ bool TrajOpt::generate_traj(const Eigen::MatrixXd& iniState,
   tracking_ps_ = target_predcit;
   tracking_visible_ps_ = visible_ps;
   tracking_thetas_ = thetas;
+
+  setBoundConds(iniState, finState);
+  x_[dim_p_ + dim_t_] = 0.1;
+  int opt_ret = optimize();
+  if (opt_ret < 0) {
+    return false;
+  }
+  double sumT = sum_T_ + x_[dim_p_ + dim_t_] * x_[dim_p_ + dim_t_];
+  forwardT(t_, sumT, T);
+  forwardP(p_, cfgVs_, P);
+  jerkOpt_.generate(P, T);
+  // std::cout << "P: \n" << P << std::endl;
+  // std::cout << "T: " << T.transpose() << std::endl;
+  traj = jerkOpt_.getTraj();
+  delete[] x_;
+  return true;
+}
+
+// NOTE just for landing the car of YTK
+bool TrajOpt::generate_traj(const Eigen::MatrixXd& iniState,
+                            const Eigen::MatrixXd& finState,
+                            const std::vector<Eigen::Vector3d>& target_predcit,
+                            const std::vector<Eigen::MatrixXd>& hPolys,
+                            Trajectory& traj) {
+  landing_ = true;
+  cfgHs_ = hPolys;
+  if (cfgHs_.size() == 1) {
+    cfgHs_.push_back(cfgHs_[0]);
+  }
+  if (!extractVs(cfgHs_, cfgVs_)) {
+    ROS_ERROR("extractVs fail!");
+    return false;
+  }
+  N_ = 2 * cfgHs_.size();
+  // NOTE wonderful trick
+  sum_T_ = tracking_dur_;
+
+  // NOTE: one corridor two pieces
+  dim_t_ = N_ - 1;
+  dim_p_ = 0;
+  for (const auto& cfgV : cfgVs_) {
+    dim_p_ += cfgV.cols() - 1;
+  }
+  // std::cout << "dim_p_: " << dim_p_ << std::endl;
+  p_.resize(dim_p_);
+  t_.resize(dim_t_);
+  x_ = new double[dim_p_ + dim_t_ + 1];
+  Eigen::VectorXd T(N_);
+  Eigen::MatrixXd P(3, N_ - 1);
+
+  tracking_ps_ = target_predcit;
 
   setBoundConds(iniState, finState);
   x_[dim_p_ + dim_t_] = 0.1;
@@ -468,22 +522,34 @@ void TrajOpt::addTimeCost(double& cost) {
     pos = c.transpose() * beta0;
     vel = c.transpose() * beta1;
     Eigen::Vector3d target_p = tracking_ps_[i];
-    if (grad_cost_p_tracking(pos, target_p, grad_tmp, cost_tmp)) {
-      gradViolaPc = beta0 * grad_tmp.transpose();
-      cost += rho * step * cost_tmp;
-      jerkOpt_.gdC.block<6, 3>(piece * 6, 0) += rho * step * gradViolaPc;
-      if (piece > 0) {
-        jerkOpt_.gdT.head(piece).array() += -rho * step * grad_tmp.dot(vel);
+
+    if (landing_) {
+      if (grad_cost_p_landing(pos, target_p, grad_tmp, cost_tmp)) {
+        gradViolaPc = beta0 * grad_tmp.transpose();
+        cost += rho * step * cost_tmp;
+        jerkOpt_.gdC.block<6, 3>(piece * 6, 0) += rho * step * gradViolaPc;
+        if (piece > 0) {
+          jerkOpt_.gdT.head(piece).array() += -rho * step * grad_tmp.dot(vel);
+        }
       }
-    }
-    // TODO occlusion
-    if (grad_cost_visibility(pos, target_p, tracking_visible_ps_[i], tracking_thetas_[i],
-                             grad_tmp, cost_tmp)) {
-      gradViolaPc = beta0 * grad_tmp.transpose();
-      cost += rho * step * cost_tmp;
-      jerkOpt_.gdC.block<6, 3>(piece * 6, 0) += rho * step * gradViolaPc;
-      if (piece > 0) {
-        jerkOpt_.gdT.head(piece).array() += -rho * step * grad_tmp.dot(vel);
+    } else {
+      if (grad_cost_p_tracking(pos, target_p, grad_tmp, cost_tmp)) {
+        gradViolaPc = beta0 * grad_tmp.transpose();
+        cost += rho * step * cost_tmp;
+        jerkOpt_.gdC.block<6, 3>(piece * 6, 0) += rho * step * gradViolaPc;
+        if (piece > 0) {
+          jerkOpt_.gdT.head(piece).array() += -rho * step * grad_tmp.dot(vel);
+        }
+      }
+      // TODO occlusion
+      if (grad_cost_visibility(pos, target_p, tracking_visible_ps_[i], tracking_thetas_[i],
+                               grad_tmp, cost_tmp)) {
+        gradViolaPc = beta0 * grad_tmp.transpose();
+        cost += rho * step * cost_tmp;
+        jerkOpt_.gdC.block<6, 3>(piece * 6, 0) += rho * step * gradViolaPc;
+        if (piece > 0) {
+          jerkOpt_.gdT.head(piece).array() += -rho * step * grad_tmp.dot(vel);
+        }
       }
     }
 
@@ -583,6 +649,39 @@ bool TrajOpt::grad_cost_p_tracking(const Eigen::Vector3d& p,
       costp += pen2 * pen;
       ret = true;
     }
+  }
+  pen = dz2 - tolerance_d_ * tolerance_d_;
+  if (pen > 0) {
+    double pen2 = pen * pen;
+    gradp.z() += 6 * pen2 * dp.z();
+    costp += pen * pen2;
+    ret = true;
+  }
+
+  gradp *= rhoTracking_;
+  costp *= rhoTracking_;
+
+  return ret;
+}
+
+bool TrajOpt::grad_cost_p_landing(const Eigen::Vector3d& p,
+                                  const Eigen::Vector3d& target_p,
+                                  Eigen::Vector3d& gradp,
+                                  double& costp) {
+  Eigen::Vector3d dp = (p - target_p);
+  double dr2 = dp.head(2).squaredNorm();
+  double dz2 = dp.z() * dp.z();
+
+  bool ret;
+  gradp.setZero();
+  costp = 0;
+
+  double pen = dr2 - tolerance_d_ * tolerance_d_;
+  if (pen > 0) {
+    double pen2 = pen * pen;
+    gradp.head(2) += 6 * pen2 * dp.head(2);
+    costp += pen * pen2;
+    ret = true;
   }
   pen = dz2 - tolerance_d_ * tolerance_d_;
   if (pen > 0) {

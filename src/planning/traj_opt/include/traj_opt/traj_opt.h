@@ -55,6 +55,11 @@ class TrajOpt {
                      Trajectory& traj);
   bool generate_traj(const Eigen::MatrixXd& iniState,
                      const Eigen::MatrixXd& finState,
+                     const std::vector<Eigen::Vector3d>& target_predcit,
+                     const std::vector<Eigen::MatrixXd>& hPolys,
+                     Trajectory& traj);
+  bool generate_traj(const Eigen::MatrixXd& iniState,
+                     const Eigen::MatrixXd& finState,
                      const std::vector<Eigen::MatrixXd>& hPolys,
                      Trajectory& traj);
 
@@ -68,6 +73,10 @@ class TrajOpt {
                             const Eigen::Vector3d& target_p,
                             Eigen::Vector3d& gradp,
                             double& costp);
+  bool grad_cost_p_landing(const Eigen::Vector3d& p,
+                           const Eigen::Vector3d& target_p,
+                           Eigen::Vector3d& gradp,
+                           double& costp);
   bool grad_cost_visibility(const Eigen::Vector3d& p,
                             const Eigen::Vector3d& center,
                             const Eigen::Vector3d& vis_p,

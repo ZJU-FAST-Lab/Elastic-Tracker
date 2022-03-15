@@ -717,6 +717,12 @@ class Env {
                           std::vector<Eigen::Vector3d>& path) {
     Eigen::Vector3i start_idx = mapPtr_->pos2idx(start_p);
     Eigen::Vector3i end_idx = mapPtr_->pos2idx(end_p);
+    if (start_idx == end_idx) {
+      path.clear();
+      path.push_back(start_p);
+      path.push_back(end_p);
+      return true;
+    }
     auto stopCondition = [&](const NodePtr& ptr) -> bool {
       return ptr->idx == end_idx;
     };

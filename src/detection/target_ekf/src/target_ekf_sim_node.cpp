@@ -5,7 +5,7 @@
 #include <nav_msgs/Odometry.h>
 #include <ros/ros.h>
 
-#include <Eigen/Geometry>
+#include <target_ekf/target_ekf.hpp>
 
 typedef message_filters::sync_policies::ApproximateTime<nav_msgs::Odometry, nav_msgs::Odometry>
     YoloOdomSyncPolicy;
@@ -14,78 +14,10 @@ typedef message_filters::Synchronizer<YoloOdomSyncPolicy>
 ros::Publisher target_odom_pub_, yolo_odom_pub_;
 Eigen::Matrix3d cam2body_R_;
 Eigen::Vector3d cam2body_p_;
-double fx_, fy_, cx_, cy_;
+double fx_, fy_, cx_, cy_, width_, height_;
 ros::Time last_update_stamp_;
 double pitch_thr_ = 30;
-
-struct Ekf {
-  double dt;
-  Eigen::MatrixXd A, B, C;
-  Eigen::MatrixXd Qt, Rt;
-  Eigen::MatrixXd Sigma, K;
-  Eigen::VectorXd x;
-
-  Ekf(double _dt) : dt(_dt) {
-    A.setIdentity(6, 6);
-    Sigma.setZero(6, 6);
-    B.setZero(6, 3);
-    C.setZero(3, 6);
-    A(0, 3) = dt;
-    A(1, 4) = dt;
-    A(2, 5) = dt;
-    double t2 = dt * dt / 2;
-    B(0, 0) = t2;
-    B(1, 1) = t2;
-    B(2, 2) = t2;
-    B(3, 0) = dt;
-    B(4, 1) = dt;
-    B(5, 2) = dt;
-    C(0, 0) = 1;
-    C(1, 1) = 1;
-    C(2, 2) = 1;
-    K = C;
-    Qt.setIdentity(3, 3);
-    Rt.setIdentity(3, 3);
-    Qt(0, 0) = 4;
-    Qt(1, 1) = 4;
-    Qt(2, 2) = 1;
-    Rt(0, 0) = 0.1;
-    Rt(1, 1) = 0.1;
-    Rt(2, 2) = 0.1;
-    x.setZero(6);
-  }
-  inline void predict() {
-    x = A * x;
-    Sigma = A * Sigma * A.transpose() + B * Qt * B.transpose();
-    return;
-  }
-  inline void reset(const Eigen::Vector3d& z) {
-    x.head(3) = z;
-    x.tail(3).setZero();
-    Sigma.setZero();
-  }
-  inline bool checkValid(const Eigen::Vector3d& z) const {
-    Eigen::MatrixXd K_tmp = Sigma * C.transpose() * (C * Sigma * C.transpose() + Rt).inverse();
-    Eigen::VectorXd x_tmp = x + K_tmp * (z - C * x);
-    const double vmax = 4;
-    if (x_tmp.tail(3).norm() > vmax) {
-      return false;
-    } else {
-      return true;
-    }
-  }
-  inline void update(const Eigen::Vector3d& z) {
-    K = Sigma * C.transpose() * (C * Sigma * C.transpose() + Rt).inverse();
-    x = x + K * (z - C * x);
-    Sigma = Sigma - K * C * Sigma;
-  }
-  inline const Eigen::Vector3d pos() const {
-    return x.head(3);
-  }
-  inline const Eigen::Vector3d vel() const {
-    return x.tail(3);
-  }
-};
+bool check_fov_ = false;
 
 std::shared_ptr<Ekf> ekfPtr_;
 
@@ -94,7 +26,7 @@ void predict_state_callback(const ros::TimerEvent& event) {
   if (update_dt < 2.0) {
     ekfPtr_->predict();
   } else {
-    ROS_WARN("too long time no update!");
+    ROS_WARN("[ekf] too long time no update!");
     return;
   }
   // publish target odom
@@ -107,7 +39,12 @@ void predict_state_callback(const ros::TimerEvent& event) {
   target_odom.twist.twist.linear.x = ekfPtr_->vel().x();
   target_odom.twist.twist.linear.y = ekfPtr_->vel().y();
   target_odom.twist.twist.linear.z = ekfPtr_->vel().z();
-  target_odom.pose.pose.orientation.w = 1.0;
+  Eigen::Vector3d rpy = ekfPtr_->rpy();
+  Eigen::Quaterniond q = euler2quaternion(rpy);
+  target_odom.pose.pose.orientation.w = q.w();
+  target_odom.pose.pose.orientation.x = q.x();
+  target_odom.pose.pose.orientation.y = q.y();
+  target_odom.pose.pose.orientation.z = q.z();
   target_odom_pub_.publish(target_odom);
 }
 
@@ -115,7 +52,7 @@ void update_state_callback(const nav_msgs::OdometryConstPtr& target_msg, const n
   // std::cout << "yolo stamp: " << bboxes_msg->header.stamp << std::endl;
   // std::cout << "odom stamp: " << odom_msg->header.stamp << std::endl;
   Eigen::Vector3d odom_p, p;
-  Eigen::Quaterniond odom_q;
+  Eigen::Quaterniond odom_q, q;
   odom_p(0) = odom_msg->pose.pose.position.x;
   odom_p(1) = odom_msg->pose.pose.position.y;
   odom_p(2) = odom_msg->pose.pose.position.z;
@@ -130,30 +67,38 @@ void update_state_callback(const nav_msgs::OdometryConstPtr& target_msg, const n
   p.x() = target_msg->pose.pose.position.x;
   p.y() = target_msg->pose.pose.position.y;
   p.z() = target_msg->pose.pose.position.z;
+  q.w() = target_msg->pose.pose.orientation.w;
+  q.x() = target_msg->pose.pose.orientation.x;
+  q.y() = target_msg->pose.pose.orientation.y;
+  q.z() = target_msg->pose.pose.orientation.z;
+
+  Eigen::Vector3d rpy = quaternion2euler(q);
 
   // NOTE check whether it's in FOV
-  Eigen::Vector3d p_in_body = cam_q.inverse() * (p - cam_p);
-  if (p_in_body.z() < 0.1 || p_in_body.z() > 5.0) {
-    return;
-  }
-  double x = p_in_body.x() * fx_ / p_in_body.z() + cx_;
-  if (x < 0 || x > 640) {
-    return;
-  }
-  double y = p_in_body.y() * fy_ / p_in_body.z() + cy_;
-  if (y < 0 || y > 480) {
-    return;
+  if (check_fov_) {
+    Eigen::Vector3d p_in_body = cam_q.inverse() * (p - cam_p);
+    if (p_in_body.z() < 0.1 || p_in_body.z() > 5.0) {
+      return;
+    }
+    double x = p_in_body.x() * fx_ / p_in_body.z() + cx_;
+    if (x < 0 || x > height_) {
+      return;
+    }
+    double y = p_in_body.y() * fy_ / p_in_body.z() + cy_;
+    if (y < 0 || y > width_) {
+      return;
+    }
   }
 
   // update target odom
   double update_dt = (ros::Time::now() - last_update_stamp_).toSec();
-  if (update_dt > 3.0) {
-    ekfPtr_->reset(p);
-    ROS_WARN("ekf reset!");
-  } else if (ekfPtr_->checkValid(p)) {
-    ekfPtr_->update(p);
+  if (update_dt > 5.0) {
+    ekfPtr_->reset(p, rpy);
+    ROS_WARN("[ekf] reset!");
+  } else if (ekfPtr_->update(p, rpy)) {
+    // ROS_WARN("[ekf] update!");
   } else {
-    ROS_ERROR("update invalid!");
+    ROS_ERROR("[ekf] update invalid!");
     return;
   }
   last_update_stamp_ = ros::Time::now();
@@ -179,7 +124,10 @@ int main(int argc, char** argv) {
   nh.getParam("cam_fy", fy_);
   nh.getParam("cam_cx", cx_);
   nh.getParam("cam_cy", cy_);
+  nh.getParam("cam_width", width_);
+  nh.getParam("cam_height", height_);
   nh.getParam("pitch_thr", pitch_thr_);
+  nh.getParam("check_fov", check_fov_);
 
   message_filters::Subscriber<nav_msgs::Odometry> yolo_sub_;
   message_filters::Subscriber<nav_msgs::Odometry> odom_sub_;

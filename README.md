@@ -14,7 +14,7 @@
   </p>
 </a>
 
-## 1. Run Simulations
+## 1. Simulation of Aerial Tracking 
 
 [NOTE] remember to change the CUDA option of **src/uav_simulator/local_sensing/CMakeLists.txt**
 
@@ -52,4 +52,20 @@ roslaunch planning simulation2.launch
 ```
 <p align="center">
     <img src="figs/sim2.gif" width="500"/>
+</p>
+
+## 2. Simulation of Aerial Landing
+
+> First start the stage of tracking:
+```
+roslaunch planning fake_car_target.launch
+roslaunch planning simulation_landing.launch
+./sh_utils/pub_triger.sh
+```
+> Triger the drone to land on the moving vehicle:
+```
+./sh_utils/land_triger.sh
+```
+<p align="center">
+    <img src="figs/sim_landing.gif" width="500"/>
 </p>

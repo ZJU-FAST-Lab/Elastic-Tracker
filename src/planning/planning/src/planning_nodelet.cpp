@@ -25,7 +25,7 @@ Eigen::IOFormat CommaInitFmt(Eigen::StreamPrecision, Eigen::DontAlignCols, ", ",
 class Nodelet : public nodelet::Nodelet {
  private:
   std::thread initThread_;
-  ros::Subscriber gridmap_sub_, odom_sub_, target_sub_, triger_sub_;
+  ros::Subscriber gridmap_sub_, odom_sub_, target_sub_, triger_sub_, land_triger_sub_;
   ros::Timer plan_timer_;
 
   ros::Publisher traj_pub_, heartbeat_pub_, replanState_pub_;
@@ -39,6 +39,8 @@ class Nodelet : public nodelet::Nodelet {
   // NOTE planning or fake target
   bool fake_ = false;
   Eigen::Vector3d goal_;
+  Eigen::Vector3d land_p_;
+  Eigen::Quaterniond land_q_;
 
   // NOTE just for debug
   bool debug_ = false;
@@ -63,6 +65,7 @@ class Nodelet : public nodelet::Nodelet {
   std::atomic_bool map_received_ = ATOMIC_VAR_INIT(false);
   std::atomic_bool triger_received_ = ATOMIC_VAR_INIT(false);
   std::atomic_bool target_received_ = ATOMIC_VAR_INIT(false);
+  std::atomic_bool land_triger_received_ = ATOMIC_VAR_INIT(false);
 
   void pub_hover_p(const Eigen::Vector3d& hover_p, const ros::Time& stamp) {
     quadrotor_msgs::PolyTraj traj_msg;
@@ -103,8 +106,19 @@ class Nodelet : public nodelet::Nodelet {
   }
 
   void triger_callback(const geometry_msgs::PoseStampedConstPtr& msgPtr) {
-    goal_ << msgPtr->pose.position.x, msgPtr->pose.position.y, 1.5;
+    goal_ << msgPtr->pose.position.x, msgPtr->pose.position.y, 0.9;
     triger_received_ = true;
+  }
+
+  void land_triger_callback(const geometry_msgs::PoseStampedConstPtr& msgPtr) {
+    land_p_.x() = msgPtr->pose.position.x;
+    land_p_.y() = msgPtr->pose.position.y;
+    land_p_.z() = msgPtr->pose.position.z;
+    land_q_.w() = msgPtr->pose.orientation.w;
+    land_q_.x() = msgPtr->pose.orientation.x;
+    land_q_.y() = msgPtr->pose.orientation.y;
+    land_q_.z() = msgPtr->pose.orientation.z;
+    land_triger_received_ = true;
   }
 
   void odom_callback(const nav_msgs::Odometry::ConstPtr& msgPtr) {
@@ -169,32 +183,54 @@ class Nodelet : public nodelet::Nodelet {
     Eigen::Vector3d target_v(replanStateMsg_.target.twist.twist.linear.x,
                              replanStateMsg_.target.twist.twist.linear.y,
                              replanStateMsg_.target.twist.twist.linear.z);
+    Eigen::Quaterniond target_q;
+    target_q.w() = replanStateMsg_.target.pose.pose.orientation.w;
+    target_q.x() = replanStateMsg_.target.pose.pose.orientation.x;
+    target_q.y() = replanStateMsg_.target.pose.pose.orientation.y;
+    target_q.z() = replanStateMsg_.target.pose.pose.orientation.z;
 
     // NOTE force-hover: waiting for the speed of drone small enough
     if (force_hover_ && odom_v.norm() > 0.1) {
       return;
     }
 
-    // NOTE determin whether to replan
-    Eigen::Vector3d dp = target_p - odom_p;
-    // std::cout << "dist : " << dp.norm() << std::endl;
-    double desired_yaw = std::atan2(dp.y(), dp.x());
-    Eigen::Vector3d project_yaw = odom_q.toRotationMatrix().col(0);  // NOTE ZYX
-    double now_yaw = std::atan2(project_yaw.y(), project_yaw.x());
-    if (std::fabs((target_p - odom_p).norm() - tracking_dist_) < tolerance_d_ &&
-        odom_v.norm() < 0.1 && target_v.norm() < 0.2 &&
-        std::fabs(desired_yaw - now_yaw) < 0.5) {
-      if (!wait_hover_) {
-        pub_hover_p(odom_p, ros::Time::now());
-        wait_hover_ = true;
+    // NOTE just for landing on the car!
+    if (land_triger_received_) {
+      if (std::fabs((target_p - odom_p).norm() < 0.1 && odom_v.norm() < 0.1 && target_v.norm() < 0.2)) {
+        if (!wait_hover_) {
+          pub_hover_p(odom_p, ros::Time::now());
+          wait_hover_ = true;
+        }
+        ROS_WARN("[planner] HOVERING...");
+        return;
       }
-      ROS_WARN("[planner] HOVERING...");
-      replanStateMsg_.state = -1;
-      replanState_pub_.publish(replanStateMsg_);
-      return;
-    } else {
+      // TODO get the orientation fo target and calculate the pose of landing point
+      target_p = target_p + target_q * land_p_;
       wait_hover_ = false;
+    } else {
+      target_p.z() += 1.0;
+      // NOTE determin whether to replan
+      Eigen::Vector3d dp = target_p - odom_p;
+      // std::cout << "dist : " << dp.norm() << std::endl;
+      double desired_yaw = std::atan2(dp.y(), dp.x());
+      Eigen::Vector3d project_yaw = odom_q.toRotationMatrix().col(0);  // NOTE ZYX
+      double now_yaw = std::atan2(project_yaw.y(), project_yaw.x());
+      if (std::fabs((target_p - odom_p).norm() - tracking_dist_) < tolerance_d_ &&
+          odom_v.norm() < 0.1 && target_v.norm() < 0.2 &&
+          std::fabs(desired_yaw - now_yaw) < 0.5) {
+        if (!wait_hover_) {
+          pub_hover_p(odom_p, ros::Time::now());
+          wait_hover_ = true;
+        }
+        ROS_WARN("[planner] HOVERING...");
+        replanStateMsg_.state = -1;
+        replanState_pub_.publish(replanStateMsg_);
+        return;
+      } else {
+        wait_hover_ = false;
+      }
     }
+
     // NOTE obtain map
     while (gridmap_lock_.test_and_set())
       ;
@@ -261,7 +297,11 @@ class Nodelet : public nodelet::Nodelet {
 
     if (generate_new_traj_success) {
       // ros::Time t_front0 = ros::Time::now();
-      generate_new_traj_success = envPtr_->findVisiblePath(p_start, target_predcit, way_pts, path);
+      if (land_triger_received_) {
+        generate_new_traj_success = envPtr_->short_astar(p_start, target_p, path);
+      } else {
+        generate_new_traj_success = envPtr_->findVisiblePath(p_start, target_predcit, way_pts, path);
+      }
       // ros::Time t_end0 = ros::Time::now();
       // t_path += (t_end0 - t_front0).toSec() * 1e3;
     }
@@ -271,30 +311,37 @@ class Nodelet : public nodelet::Nodelet {
     Trajectory traj;
     if (generate_new_traj_success) {
       visPtr_->visualize_path(path, "astar");
-      // NOTE generate visible regions
-      target_predcit.pop_back();
-      way_pts.pop_back();
-      // ros::Time t_front1 = ros::Time::now();
-      envPtr_->generate_visible_regions(target_predcit, way_pts,
-                                        visible_ps, thetas);
-      // ros::Time t_end1 = ros::Time::now();
-      // t_path += (t_end1 - t_front1).toSec() * 1e3;
-      visPtr_->visualize_pointcloud(visible_ps, "visible_ps");
-      visPtr_->visualize_fan_shape_meshes(target_predcit, visible_ps, thetas, "visible_region");
+      if (land_triger_received_) {
+        for (const auto& p : target_predcit) {
+          path.push_back(p);
+        }
+      } else {
+        // NOTE generate visible regions
+        target_predcit.pop_back();
+        way_pts.pop_back();
+        // ros::Time t_front1 = ros::Time::now();
+        envPtr_->generate_visible_regions(target_predcit, way_pts,
+                                          visible_ps, thetas);
+        // ros::Time t_end1 = ros::Time::now();
+        // t_path += (t_end1 - t_front1).toSec() * 1e3;
+        visPtr_->visualize_pointcloud(visible_ps, "visible_ps");
+        visPtr_->visualize_fan_shape_meshes(target_predcit, visible_ps, thetas, "visible_region");
+
+        // TODO change the final state
+        std::vector<std::pair<Eigen::Vector3d, Eigen::Vector3d>> rays;
+        for (int i = 0; i < (int)way_pts.size(); ++i) {
+          rays.emplace_back(target_predcit[i], way_pts[i]);
+        }
+        visPtr_->visualize_pointcloud(way_pts, "way_pts");
+        way_pts.insert(way_pts.begin(), p_start);
+        // ros::Time t_front2 = ros::Time::now();
+        envPtr_->pts2path(way_pts, path);
+        // ros::Time t_end2 = ros::Time::now();
+        // t_path += (t_end2 - t_front2).toSec() * 1e3;
+      }
       // NOTE corridor generating
       std::vector<Eigen::MatrixXd> hPolys;
       std::vector<std::pair<Eigen::Vector3d, Eigen::Vector3d>> keyPts;
-      // TODO change the final state
-      std::vector<std::pair<Eigen::Vector3d, Eigen::Vector3d>> rays;
-      for (int i = 0; i < (int)way_pts.size(); ++i) {
-        rays.emplace_back(target_predcit[i], way_pts[i]);
-      }
-      visPtr_->visualize_pointcloud(way_pts, "way_pts");
-      way_pts.insert(way_pts.begin(), p_start);
-      // ros::Time t_front2 = ros::Time::now();
-      envPtr_->pts2path(way_pts, path);
-      // ros::Time t_end2 = ros::Time::now();
-      // t_path += (t_end2 - t_front2).toSec() * 1e3;
 
       // ros::Time t_front3 = ros::Time::now();
       envPtr_->generateSFC(path, 2.0, hPolys, keyPts);
@@ -310,9 +357,14 @@ class Nodelet : public nodelet::Nodelet {
       finState.col(0) = path.back();
       finState.col(1) = target_v;
       // ros::Time t_front4 = ros::Time::now();
-      generate_new_traj_success = trajOptPtr_->generate_traj(iniState, finState,
-                                                             target_predcit, visible_ps, thetas,
-                                                             hPolys, traj);
+      if (land_triger_received_) {
+        finState.col(0) = target_predcit.back();
+        generate_new_traj_success = trajOptPtr_->generate_traj(iniState, finState, target_predcit, hPolys, traj);
+      } else {
+        generate_new_traj_success = trajOptPtr_->generate_traj(iniState, finState,
+                                                               target_predcit, visible_ps, thetas,
+                                                               hPolys, traj);
+      }
       // ros::Time t_end4 = ros::Time::now();
       // double t_optimization = (t_end4 - t_front4).toSec() * 1e3;
 
@@ -343,12 +395,15 @@ class Nodelet : public nodelet::Nodelet {
       replanStateMsg_.state = 0;
       replanState_pub_.publish(replanStateMsg_);
       Eigen::Vector3d dp = target_p + target_v * 0.03 - iniState.col(0);
-      // NOTE : if the trajectory is known, watch that direction
+      // NOTE : if the drone is going to unknown areas, watch that direction
       // Eigen::Vector3d un_known_p = traj.getPos(1.0);
       // if (gridmapPtr_->isUnKnown(un_known_p)) {
       //   dp = un_known_p - odom_p;
       // }
       double yaw = std::atan2(dp.y(), dp.x());
+      if (land_triger_received_) {
+        yaw = 2 * std::atan2(target_q.z(), target_q.w());
+      }
       pub_traj(traj, yaw, replan_stamp);
       traj_poly_ = traj;
       replan_stamp_ = replan_stamp;
@@ -723,6 +778,7 @@ class Nodelet : public nodelet::Nodelet {
     odom_sub_ = nh.subscribe<nav_msgs::Odometry>("odom", 10, &Nodelet::odom_callback, this, ros::TransportHints().tcpNoDelay());
     target_sub_ = nh.subscribe<nav_msgs::Odometry>("target", 10, &Nodelet::target_callback, this, ros::TransportHints().tcpNoDelay());
     triger_sub_ = nh.subscribe<geometry_msgs::PoseStamped>("triger", 10, &Nodelet::triger_callback, this, ros::TransportHints().tcpNoDelay());
+    land_triger_sub_ = nh.subscribe<geometry_msgs::PoseStamped>("land_triger", 10, &Nodelet::land_triger_callback, this, ros::TransportHints().tcpNoDelay());
     ROS_WARN("Planning node initialized!");
   }
 

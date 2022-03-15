@@ -1,0 +1,26 @@
+<launch>
+  <group ns="drone0">
+    <include file="$(find mapping)/launch/mapping.launch"/>
+    <node name="mapping_vis" pkg="mapping" type="mapping_vis_node">
+      <remap from="~gridmap" to="gridmap"/>
+      <remap from="~gridmap_inflate" to="gridmap_inflate"/>
+    </node>
+    <node pkg="odom_visualization" name="odom_visualization" type="odom_visualization" output="screen">
+      <remap from="~odom" to="odom" />
+      <param name="robot_scale" value="1.0"/>
+    </node>
+    <node pkg="target_ekf" name="target_ekf_sim_node" type="target_ekf_sim_node" output="screen">
+      <rosparam command="load" file="$(find target_ekf)/config/camera.yaml" />
+      <param name="pitch_thr" value="37"/>
+      <param name="check_fov" value="false"/>
+      <remap from="~yolo" to="/target/odom"/>
+      <remap from="~odom" to="odom"/>
+      <remap from="~target_odom" to="/target_ekf_odom"/>
+    </node>
+    <include file="$(find planning)/launch/planning.launch">
+      <arg name="rhosVisibility_" value="10000.0"/>
+      <arg name="rhoTracking_" value="1000.0"/>
+      <arg name="target_name_" value="/target_ekf_odom"/>
+    </include>
+  </group>
+</launch>

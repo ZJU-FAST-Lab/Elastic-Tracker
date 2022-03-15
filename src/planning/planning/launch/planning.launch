@@ -16,6 +16,7 @@
     <remap from="~replanState" to="replanState"/>
     <remap from="~target" to="$(arg target_name_)"/>
     <remap from="~triger" to="/triger"/>
+    <remap from="~land_triger" to="/land_triger"/>
 
     <param name="plan_hz" value="20"/>
 

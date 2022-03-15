@@ -46,3 +46,15 @@ target_link_libraries(odom_visualization
 add_dependencies(odom_visualization
   ${catkin_EXPORTED_TARGETS}
 )
+
+add_executable(odom_visualization_car src/odom_visualization_car.cpp)
+
+target_link_libraries(odom_visualization_car
+   ${catkin_LIBRARIES}
+   ${ARMADILLO_LIBRARIES}
+   pose_utils
+)
+
+add_dependencies(odom_visualization_car
+  ${catkin_EXPORTED_TARGETS}
+)
