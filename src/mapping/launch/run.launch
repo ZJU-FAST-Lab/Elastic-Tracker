@@ -1,0 +1,49 @@
+<launch>
+
+  <!-- <node name="rviz" pkg="rviz" type="rviz" args="-d $(find mapping)/config/rviz_sim.rviz">
+  </node> -->
+  <include file="$(find realsense2_camera)/launch/rs_camera.launch"/>
+
+  <group ns="drone0">
+    <node pkg="nodelet" type="nodelet" name="manager" args="manager" output="screen">
+      <param name="num_worker_threads" value="16"/>
+    </node>
+
+    <node pkg="nodelet" type="nodelet" name="mapping" args="load mapping/Nodelet manager" output="screen">
+      <!-- camera parameters -->
+      <rosparam command="load" file="$(find mapping)/config/D435.yaml" />
+      <!-- remap topics -->
+      <remap from="~odom" to="/ekf/ekf_odom"/>
+      <!-- <remap from="~odom" to="/vins_estimator/imu_propagate"/> -->
+      <remap from="~depth" to="/camera/depth/image_rect_raw"/>
+      <!-- <remap from="~odom" to="/msckf_vio/odometry"/>
+      <remap from="~depth" to="/camera/aligned_depth_to_infra1/image_raw"/> -->
+      <remap from="~gridmap" to="gridmap"/>
+      <remap from="~gridmap_inflate" to="gridmap_inflate"/>
+      <param name="down_sample_factor" value="2"/>
+      <!-- depth filter parameters -->
+      <param name="depth_filter_tolerance" value="0.15"/>
+      <param name="depth_filter_mindist" value="0.2"/>
+      <param name="depth_filter_margin" value="2"/>
+      <!-- raycasting parameters -->
+      <param name="p_min" value="-199"/>
+      <param name="p_max" value=" 220"/>
+      <param name="p_hit" value="  62"/>
+      <param name="p_mis" value="  62"/>
+      <param name="p_occ" value=" 139"/>
+      <param name="p_def" value="-199"/>
+      <!-- mapping parameters -->
+      <param name="resolution" value="0.15"/>
+      <param name="local_x" value="20"/>
+      <param name="local_y" value="20"/>
+      <param name="local_z" value="5"/>
+      <param name="inflate_size" value="1"/>
+      <!-- use mask -->
+      <param name="use_mask" value="true"/>
+      <remap from="~target" to="/target_ekf_node/target_odom"/>
+    </node>
+
+  </group>
+
+
+</launch>

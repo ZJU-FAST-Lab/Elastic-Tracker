@@ -1,0 +1,8 @@
+<launch>
+  <group ns="drone0">
+    <node pkg="planning" name="play_bag_node" type="play_bag_node" output="screen">
+      <remap from="~gridmap" to="gridmap_inflate"/>
+      <remap from="~replanState" to="replanState"/>
+    </node>
+  </group>
+</launch>

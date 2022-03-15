@@ -1,0 +1,77 @@
+<launch>
+  <node pkg="mockamap" type="mockamap_node" name="mockamap_node" output="screen">
+    <rosparam file="$(find uav_simulator)/config/mockamap.yaml"/>
+    <remap from="/mock_map" to="/global_map"/>
+  </node>
+
+  <group ns="target">
+
+    <node pkg="nodelet" type="nodelet" name="manager" args="manager" output="screen">
+      <param name="num_worker_threads" value="16"/>
+    </node>
+    <node pkg="nodelet" type="nodelet" name="so3_quadrotor" args="load so3_quadrotor/Nodelet manager" output="screen">
+      <rosparam file="$(find uav_simulator)/config/so3_quadrotor.yaml"/>
+      <param name="init_x" value="2" />
+      <param name="init_y" value="0" />
+      <param name="init_z" value="2" />
+      <remap from="~odom" to="odom"/>
+      <remap from="~imu" to="imu" />
+      <remap from="~so3cmd" to="so3cmd"/>
+      <remap from="~vis" to="vis"/>
+    </node>
+    <node pkg="nodelet" type="nodelet" name="so3_controller" args="load so3_controller/Nodelet manager" output="screen">
+      <rosparam file="$(find uav_simulator)/config/so3_controller.yaml"/>
+      <remap from="~odom" to="odom"/>
+      <remap from="~imu" to="imu" />
+      <remap from="~so3cmd" to="so3cmd"/>
+      <remap from="~position_cmd" to="position_cmd"/>
+    </node>
+    <node pkg="nodelet" type="nodelet" name="mapping" args="load mapping/Nodelet manager" output="screen">
+      <!-- global map parameters -->
+      <rosparam file="$(find uav_simulator)/config/mockamap.yaml"/>
+      <!-- remap topics -->
+      <remap from="~global_map" to="/global_map"/>
+      <remap from="~gridmap" to="gridmap"/>
+      <remap from="~gridmap_inflate" to="gridmap_inflate"/>
+      <!-- mapping parameters -->
+      <param name="resolution" value="0.15"/>
+      <param name="inflate_size" value="2"/>
+      <param name="use_global_map" value="true"/>
+    </node>
+    <node pkg="odom_visualization" name="odom_visualization" type="odom_visualization" output="screen">
+      <remap from="~odom" to="odom" />
+      <param name="robot_scale" value="0.7"/>
+    </node>
+
+    <node pkg="nodelet" type="nodelet" name="planning" args="load planning/Nodelet manager" output="screen">
+      <remap from="~odom" to="odom"/>
+      <remap from="~gridmap_inflate" to="gridmap_inflate"/>
+      <remap from="~heartbeat" to="heartbeat"/>
+      <remap from="~trajectory" to="trajectory"/>
+      <remap from="~replanState" to="replanState"/>
+      <remap from="~triger" to="/move_base_simple/goal"/>
+
+      <param name="plan_hz" value="20"/>
+
+      <param name="K" value="8"/>
+      <param name="vmax" value="1.5"/>
+      <param name="amax" value="2.5"/>
+      <param name="rhoT" value="100.0"/>
+      <param name="rhoP" value="10000.0"/>
+      <param name="rhoV" value="1000.0"/>
+      <param name="rhoA" value="1000.0"/>
+      <param name="clearance_d" value="0.2"/>
+      <param name="tolerance_d" value="0.5"/>
+      <param name="tracking_dist" value="3.0"/>
+      <param name="debug" value="false"/>
+      <param name="fake" value="true"/>
+
+    </node>
+    <node pkg="planning" name="traj_server" type="traj_server" output="screen">
+      <remap from="~position_cmd" to="position_cmd"/>
+      <remap from="~trajectory" to="trajectory"/>
+      <remap from="~heartbeat" to="heartbeat"/>
+      <param name="time_forward" value="1.0" type="double"/>
+    </node>
+  </group>
+</launch>

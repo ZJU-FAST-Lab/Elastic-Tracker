@@ -1,0 +1,43 @@
+<launch>
+  <group ns="drone0">
+
+    <node pkg="nodelet" type="nodelet" name="manager" args="manager" output="screen">
+      <param name="num_worker_threads" value="16"/>
+    </node>
+
+    <node pkg="nodelet" type="nodelet" name="planning" args="load planning/Nodelet manager" output="screen">
+      <remap from="~odom" to="/vins_estimator/imu_propagate"/>
+      <remap from="~gridmap_inflate" to="gridmap_inflate"/>
+      <remap from="~heartbeat" to="heartbeat"/>
+      <remap from="~trajectory" to="trajectory"/>
+      <remap from="~replanState" to="replanState"/>
+      <remap from="~target" to="/target_ekf_odom"/>
+      <remap from="~triger" to="/triger"/>
+
+      <param name="plan_hz" value="20"/>
+
+      <param name="K" value="8"/>
+      <param name="vmax" value="1.0"/>
+      <param name="amax" value="2.0"/>
+      <param name="rhoT" value="100.0"/>
+      <param name="rhoP" value="10000.0"/>
+      <param name="rhoV" value="1000.0"/>
+      <param name="rhoA" value="1000.0"/>
+      <param name="rhoTracking" value="1000.0"/>
+      <param name="rhosVisibility" value="10000.0"/>
+      <param name="theta_clearance" value="0.6"/>
+      <param name="clearance_d" value="0.2"/>
+      <param name="tolerance_d" value="0.3"/>
+      <param name="tracking_dist" value="2.6"/>
+      <param name="tracking_dur" value="3.0"/>
+      <param name="tracking_dt" value="0.2"/>
+      <param name="debug" value="true"/>
+      <param name="fake" value="false"/>
+
+      <param name="prediction/rho_a" value="1.0"/>
+      <param name="prediction/car_z" value="1.0"/>
+      <param name="prediction/vmax" value="2.0"/>
+
+    </node>
+  </group>
+</launch>

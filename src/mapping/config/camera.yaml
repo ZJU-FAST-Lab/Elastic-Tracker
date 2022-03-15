@@ -1,0 +1,15 @@
+camera_rate: 30.0
+camera_range: 7.0
+
+cam_width:  640
+cam_height: 480
+cam_fx:     387.229248046875
+cam_fy:     387.229248046875
+cam_cx:     321.04638671875
+cam_cy:     243.44969177246094
+
+depth_scaling_factor: 1000.0
+cam2body_R: [ 0.0,  0.0,  1.0,
+             -1.0,  0.0,  0.0,
+              0.0, -1.0,  0.0]
+cam2body_p: [0.0, 0.0, 0.05]

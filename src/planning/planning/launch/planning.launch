@@ -1,0 +1,49 @@
+<launch>
+
+  <arg name="rhosVisibility_"/>
+  <arg name="rhoTracking_"/>
+  <arg name="target_name_"/>
+
+  <!-- <node pkg="nodelet" type="nodelet" name="plan_manage" args="manager" output="screen">
+    <param name="num_worker_threads" value="16"/>
+  </node> -->
+
+  <node pkg="nodelet" type="nodelet" name="planning" args="load planning/Nodelet manager" output="screen">
+    <remap from="~odom" to="odom"/>
+    <remap from="~gridmap_inflate" to="gridmap_inflate"/>
+    <remap from="~heartbeat" to="heartbeat"/>
+    <remap from="~trajectory" to="trajectory"/>
+    <remap from="~replanState" to="replanState"/>
+    <remap from="~target" to="$(arg target_name_)"/>
+    <remap from="~triger" to="/triger"/>
+
+    <param name="plan_hz" value="20"/>
+
+    <param name="K" value="8"/>
+    <param name="vmax" value="3.0"/>
+    <param name="amax" value="6.0"/>
+    <param name="rhoT" value="100.0"/>
+    <param name="rhoP" value="10000.0"/>
+    <param name="rhoV" value="1000.0"/>
+    <param name="rhoA" value="1000.0"/>
+    <param name="rhoTracking" value="$(arg rhoTracking_)"/>
+    <param name="rhosVisibility" value="$(arg rhosVisibility_)"/>
+    <param name="theta_clearance" value="0.8"/>
+    <param name="clearance_d" value="0.2"/>
+    <param name="tolerance_d" value="0.3"/>
+    <param name="tracking_dist" value="2.5"/>
+    <param name="tracking_dur" value="3.0"/>
+    <param name="tracking_dt" value="0.2"/>
+    <param name="debug" value="false"/>
+
+    <param name="prediction/rho_a" value="1.0"/>
+    <param name="prediction/vmax" value="4.0"/>
+
+  </node>
+  <node pkg="planning" name="traj_server" type="traj_server" output="screen">
+    <remap from="~position_cmd" to="position_cmd"/>
+    <remap from="~trajectory" to="trajectory"/>
+    <remap from="~heartbeat" to="heartbeat"/>
+    <param name="time_forward" value="1.0" type="double"/>
+  </node>
+</launch>

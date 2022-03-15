@@ -1,0 +1,35 @@
+<launch>
+  <arg name="init_x_" default="0"/>
+  <arg name="init_y_" default="0"/>
+  <arg name="init_z_" default="2"/>
+
+  <node pkg="nodelet" type="nodelet" name="so3_quadrotor" args="load so3_quadrotor/Nodelet manager" output="screen">
+    <rosparam file="$(find uav_simulator)/config/so3_quadrotor.yaml"/>
+    <param name="init_x" value="$(arg init_x_)" />
+    <param name="init_y" value="$(arg init_y_)" />
+    <param name="init_z" value="$(arg init_z_)" />
+    <remap from="~odom" to="odom"/>
+    <remap from="~imu" to="imu" />
+    <remap from="~so3cmd" to="so3cmd"/>
+    <remap from="~vis" to="vis"/>
+  </node>
+  <node pkg="nodelet" type="nodelet" name="so3_controller" args="load so3_controller/Nodelet manager" output="screen">
+    <rosparam file="$(find uav_simulator)/config/so3_controller.yaml"/>
+    <remap from="~odom" to="odom"/>
+    <remap from="~imu" to="imu" />
+    <remap from="~so3cmd" to="so3cmd"/>
+    <remap from="~position_cmd" to="position_cmd"/>
+  </node>
+
+  <node pkg="local_sensing_node" type="pcl_render_node" name="pcl_render_node" output="screen">
+    <rosparam command="load" file="$(find local_sensing_node)/params/camera.yaml" />
+    <param name="sensing_horizon" value="5.0" />
+    <param name="sensing_rate" value="30.0"/>
+    <param name="estimation_rate" value="30.0"/>
+
+    <remap from="~global_map" to="/global_map"/>
+    <remap from="~odometry" to="odom"/>
+    <remap from="~depth" to="depth"/>
+  </node>
+
+</launch>

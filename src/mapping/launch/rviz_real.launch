@@ -1,0 +1,20 @@
+<launch>
+  <node name="rviz" pkg="rviz" type="rviz" args="-d $(find mapping)/config/rviz_real.rviz">
+  </node>
+  <group ns="drone0">
+    <node name="mapping_vis" pkg="mapping" type="mapping_vis_node">
+      <remap from="~gridmap" to="gridmap"/>
+      <remap from="~gridmap_inflate" to="gridmap_inflate"/>
+      <param name="remove_floor_ceil" value="false"/>
+    </node>
+    <node pkg="odom_visualization" name="odom_visualization" type="odom_visualization" output="screen">
+      <remap from="~odom" to="/ekf/ekf_odom" />
+      <param name="color/a" value="1.0"/>
+      <param name="color/r" value="0.0"/>
+      <param name="color/g" value="0.0"/>
+      <param name="color/b" value="1.0"/>
+      <param name="covariance_scale" value="100.0"/>
+      <param name="robot_scale" value="1.0"/>
+    </node>
+  </group>
+</launch>

@@ -1,0 +1,5 @@
+<library path="lib/libmapping_nodelet">
+  <class name="mapping/Nodelet" type="mapping::Nodelet" base_class_type="nodelet::Nodelet">
+    <description></description>
+  </class>
+</library>

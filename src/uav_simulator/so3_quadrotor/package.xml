@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>so3_quadrotor</name>
+  <version>0.0.0</version>
+  <description>The so3_quadrotor package</description>
+
+  <maintainer email="jlji@zju.edu.cn">ji</maintainer>
+
+  <license>GPLv3</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+  <depend>quadrotor_msgs</depend>
+  <depend>roscpp</depend>
+  <depend>nodelet</depend>
+  <depend>tf</depend>
+
+  <export>
+    <nodelet plugin="${prefix}/nodelet_plugin.xml"/>
+  </export>
+</package>

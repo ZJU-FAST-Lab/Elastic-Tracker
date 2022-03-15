@@ -1,0 +1,18 @@
+init_x: 0.0
+init_y: 0.0
+init_z: 2.0
+
+init_yaw: 0.0
+simulation_rate: 1000
+odom_rate: 400
+g: 9.81
+mass: 0.98
+Ixx: 2.64e-3
+Iyy: 2.64e-3
+Izz: 4.96e-3
+kf: 8.98132e-9
+prop_radius: 0.062
+arm_length: 0.26
+motor_time_constant: 0.03333
+max_rpm: 35000.0
+min_rpm: 1200.0

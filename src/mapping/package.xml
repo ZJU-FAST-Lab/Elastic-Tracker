@@ -1,0 +1,27 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>mapping</name>
+  <version>0.0.0</version>
+  <description>The mapping package</description>
+
+  <maintainer email="jlji@zju.edu.cn">ji</maintainer>
+
+  <license>GPLv3</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+  <depend>roscpp</depend>
+  <depend>nodelet</depend>
+  <depend>quadrotor_msgs</depend>
+  <depend>cv_bridge</depend>
+  <depend>tf</depend>
+  <depend>pcl_ros</depend>
+  <depend>pcl_conversions</depend>
+  <depend>object_detection_msgs</depend>
+  <depend>pose_utils</depend>
+
+
+  <export>
+    <nodelet plugin="${prefix}/nodelet_plugin.xml"/>
+  </export>
+
+</package>

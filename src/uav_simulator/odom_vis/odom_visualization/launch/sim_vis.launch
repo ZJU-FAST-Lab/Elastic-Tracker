@@ -1,0 +1,14 @@
+ <launch>
+  <node pkg="odom_visualization" name="odom_visualization" type="odom_visualization" output="screen">
+        <!-- <remap from="~odom" to="/fusion_odom"/> -->
+		<remap from="~odom" to="/drone0/odom" />
+        
+        <param name="color/a" value="1.0"/>    
+        <param name="color/r" value="0.0"/>        
+        <param name="color/g" value="0.0"/>        
+        <param name="color/b" value="1.0"/>       
+        <param name="covariance_scale" value="100.0"/>       
+        <param name="robot_scale" value="1.0"/>
+        
+  </node>
+</launch>

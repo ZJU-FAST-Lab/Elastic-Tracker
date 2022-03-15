@@ -1,0 +1,4 @@
+<launch>
+  <node name="rviz" pkg="rviz" type="rviz" args="-d $(find mapping)/config/rviz_sim.rviz">
+  </node>
+</launch>

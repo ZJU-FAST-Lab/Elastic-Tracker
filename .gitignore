@@ -1,0 +1,8 @@
+src/CMakeLists.txt
+.catkin_workspace
+devel
+build
+debug
+bags
+*.bag
+*.bag.active

@@ -1,0 +1,5 @@
+<library path="lib/libso3_quadrotor_nodelet">
+  <class name="so3_quadrotor/Nodelet" type="so3_quadrotor::Nodelet" base_class_type="nodelet::Nodelet">
+    <description></description>
+  </class>
+</library>

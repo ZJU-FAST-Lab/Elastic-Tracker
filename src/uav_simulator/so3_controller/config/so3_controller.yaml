@@ -1,0 +1,11 @@
+g: 9.81
+mass: 0.98
+gains/rot/x  : 1.5
+gains/rot/y  : 1.5
+gains/rot/z  : 1.0
+gains/ang/x  : 0.13
+gains/ang/y  : 0.13
+gains/ang/z  : 0.1
+corrections/z: 0.0
+corrections/r: 0.0
+corrections/p: 0.0

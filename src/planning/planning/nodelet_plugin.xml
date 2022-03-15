@@ -1,0 +1,5 @@
+<library path="lib/libplanning_nodelet">
+  <class name="planning/Nodelet" type="planning::Nodelet" base_class_type="nodelet::Nodelet">
+    <description></description>
+  </class>
+</library>
