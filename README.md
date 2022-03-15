@@ -46,7 +46,7 @@ roslaunch planning simulation1.launch
     <img src="figs/sim1.gif" width="500"/>
 </p>
 
-Comparision of the planners <font color=blue>with</font> and <font color=orange>without</font> **visibility guarantee**:
+Comparision of the planners *with* ![blue](https://via.placeholder.com/10/1F24E6/000000?text=+) and *without* ![blue](https://via.placeholder.com/10/E6691E/000000?text=+) **visibility guarantee**:
 ```
 roslaunch planning simulation2.launch
 ```
