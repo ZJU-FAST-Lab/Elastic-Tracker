@@ -10,6 +10,7 @@
 ros::Publisher pos_cmd_pub_;
 ros::Time heartbeat_time_;
 bool receive_traj_ = false;
+bool flight_start_ = false;
 quadrotor_msgs::PolyTraj trajMsg_, trajMsg_last_;
 Eigen::Vector3d last_p_;
 double last_yaw_ = 0;
@@ -130,8 +131,6 @@ void cmdCallback(const ros::TimerEvent &e) {
   } else if (exe_traj(trajMsg_last_)) {
     return;
   }
-  ROS_ERROR_ONCE("[traj server] traj received invalid!");
-  // publish_cmd(trajMsg_.traj_id, last_p_, Eigen::Vector3d::Zero(), Eigen::Vector3d::Zero(), 0, 0);  // TODO yaw
 }
 
 int main(int argc, char **argv) {

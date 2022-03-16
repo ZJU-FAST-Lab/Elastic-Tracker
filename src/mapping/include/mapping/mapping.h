@@ -197,23 +197,23 @@ struct OccGridMap {
     }
   }
   inline void free2occ(const Eigen::Vector3i& idx) {
-    occ.at(idx) += 32767;
+    occ.atId(idx) += 32767;
     Eigen::Vector3i id;
     for (id.x() = idx.x() - inflate_size; id.x() <= idx.x() + inflate_size; ++id.x())
       for (id.y() = idx.y() - inflate_size; id.y() <= idx.y() + inflate_size; ++id.y())
         for (id.z() = idx.z() - inflate_size; id.z() <= idx.z() + inflate_size; ++id.z()) {
-          occ.at(id)++;
-          infocc.at(id) = 1;
+          occ.atId(id)++;
+          infocc.atId(id) = 1;
         }
   }
   inline void occ2free(const Eigen::Vector3i& idx) {
-    occ.at(idx) -= 32767;
+    occ.atId(idx) -= 32767;
     Eigen::Vector3i id;
     for (id.x() = idx.x() - inflate_size; id.x() <= idx.x() + inflate_size; ++id.x())
       for (id.y() = idx.y() - inflate_size; id.y() <= idx.y() + inflate_size; ++id.y())
         for (id.z() = idx.z() - inflate_size; id.z() <= idx.z() + inflate_size; ++id.z()) {
-          occ.at(id)--;
-          infocc.at(id) = occ.at(id) > 0 ? 1 : -1;
+          occ.atId(id)--;
+          infocc.atId(id) = occ.atId(id) > 0 ? 1 : -1;
         }
   }
   inline void hit(const Eigen::Vector3i& idx) {
