@@ -595,7 +595,7 @@ class Nodelet : public nodelet::Nodelet {
       replanStateMsg_.state = 1;
       replanState_pub_.publish(replanStateMsg_);
       return;
-    } else if (validcheck(traj_poly_, replan_stamp_)) {
+    } else if (!validcheck(traj_poly_, replan_stamp_)) {
       force_hover_ = true;
       ROS_FATAL("[planner] EMERGENCY STOP!!!");
       replanStateMsg_.state = 2;
